@@ -1,0 +1,19 @@
+version: "3"
+services:
+  node:
+    container_name: next_node
+    build:
+      context: "./docker/node"
+      dockerfile: "Dockerfile"
+    ports:
+      - 3000:3000
+      - 6006:6006
+    tty: true
+    volumes:
+      - .:/app
+    networks:
+      - next_node
+
+networks:
+  next_node:
+    driver: "bridge"

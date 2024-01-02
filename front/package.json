@@ -10,12 +10,16 @@
   },
   "dependencies": {
     "@notionhq/client": "^2.2.14",
+    "babel-plugin-prismjs": "^2.1.0",
+    "dayjs": "^1.11.10",
     "next": "14.0.4",
+    "prismjs": "^1.29.0",
     "react": "^18",
     "react-dom": "^18"
   },
   "devDependencies": {
     "@types/node": "^20",
+    "@types/prismjs": "^1.26.3",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.0.1",

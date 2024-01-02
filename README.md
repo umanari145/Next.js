@@ -13,5 +13,7 @@ npx create-next-app@latest front --no-app
 ## 開発時
 
 ```
-npm run start
+npm run dev
 ```
+
+notion secret

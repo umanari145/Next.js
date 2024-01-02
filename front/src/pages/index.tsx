@@ -1,118 +1,164 @@
-import Image from 'next/image'
-import { Inter } from 'next/font/google'
+import { Client } from "@notionhq/client";
+import { GetStaticProps, NextPage } from "next";
+import styles from "../styles/Home.module.css";
 
-const inter = Inter({ subsets: ['latin'] })
+const notion = new Client({
+  auth: process.env.NOTION_TOKEN,
+});
 
-export default function Home() {
+console.log("-----------------------");
+
+export type Content =
+  | {
+      type: "paragraph" | "quote" | "heading_2" | "heading_3";
+      text: string | null;
+    }
+  | {
+      type: "code";
+      text: string | null;
+      language: string | null;
+    };
+
+export type Post = {
+  id: string;
+  title: string | null;
+  slug: string | null;
+  createdTs: string | null;
+  lastEditedTs: string | null;
+  contents: Content[];
+};
+
+type StaticProps = {
+  post: Post | null;
+};
+
+export const getStaticProps: GetStaticProps<StaticProps> = async () => {
+  const database = await notion.databases.query({
+    database_id: process.env.NOTION_DATABASE_ID || "",
+    filter: {
+      and: [
+        {
+          property: "document",
+          checkbox: {
+            equals: true,
+          },
+        },
+      ],
+    },
+    sorts: [
+      {
+        timestamp: "created_time",
+        direction: "descending",
+      },
+    ],
+  });
+
+  const blocks = await notion.blocks.children.list({
+    block_id: database.results[0]?.id,
+  });
+
+  const page = database.results[0];
+
+  if (!page) {
+    return {
+      props: {
+        post: null,
+      },
+    };
+  }
+
+  if (!("properties" in page)) {
+    return {
+      props: {
+        post: {
+          id: page.id,
+          title: null,
+          slug: null,
+          createdTs: null,
+          lastEditedTs: null,
+          contents: [],
+        },
+      },
+    };
+  }
+
+  let title: string | null = null;
+  if (page.properties["Name"]?.type === "title") {
+    title = page.properties["Name"].title[0]?.plain_text ?? null;
+  }
+  let slug: string | null = null;
+  if (page.properties["Slug"]?.type === "rich_text") {
+    slug = page.properties["Slug"].rich_text[0]?.plain_text ?? null;
+  }
+
+  const contents: Content[] = [];
+  blocks.results.forEach((block) => {
+    if (!("type" in block)) {
+      return "";
+    }
+
+    switch (block.type) {
+      case "paragraph":
+        contents.push({
+          type: "paragraph",
+          text: block.paragraph.rich_text[0]?.plain_text ?? null,
+        });
+        break;
+      case "heading_2":
+        contents.push({
+          type: "heading_2",
+          text: block.heading_2.rich_text[0]?.plain_text ?? null,
+        });
+        break;
+      case "heading_3":
+        contents.push({
+          type: "heading_3",
+          text: block.heading_3.rich_text[0]?.plain_text ?? null,
+        });
+        break;
+      case "quote":
+        contents.push({
+          type: "quote",
+          text: block.quote.rich_text[0]?.plain_text ?? null,
+        });
+        break;
+      case "code":
+        contents.push({
+          type: "code",
+          text: block.code.rich_text[0]?.plain_text ?? null,
+          language: block.code.language,
+        });
+    }
+  });
+
+  const post: Post = {
+    id: page.id,
+    title, // keyとvalueが一緒なのでこれでOK
+    slug,
+    createdTs: page.created_time,
+    lastEditedTs: page.last_edited_time,
+    contents,
+  };
+
+  return {
+    props: { post },
+  };
+};
+
+const Home: NextPage<StaticProps> = ({ post }) => {
+  if (!post) {
+    return null;
+  }
+
   return (
-    <main
-      className={`flex min-h-screen flex-col items-center justify-between p-24 ${inter.className}`}
-    >
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">src/pages/index.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{' '}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+    <>
+      <div className={styles.wrapper}>
+        <div className={styles.post}>
+          <h1 className={styles.title}>{post?.title}</h1>
         </div>
       </div>
+    </>
+  );
+};
 
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700/10 after:dark:from-sky-900 after:dark:via-[#0141ff]/40 before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Discover and deploy boilerplate example Next.js&nbsp;projects.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
-  )
-}
+export default Home;
